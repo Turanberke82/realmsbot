@@ -16,9 +16,9 @@ const api = RealmAPI.from(authflow, 'bedrock');
 
 let oncekiOyuncular = [];
 let ilkKontrol = true;
-const gamertagCache = new Map();
+const gamertagCache = new Map(); // XUID -> Gamertag önbelleği
 
-// Telegram Bildirim Fonksiyonu
+// Hızlı Telegram Bildirim Fonksiyonu
 async function telegramMesajGonder(metin) {
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(metin)}`;
@@ -29,7 +29,7 @@ async function telegramMesajGonder(metin) {
   }
 }
 
-// XUID ile Xbox Live Servisinden Gerçek Gamertag Çekme
+// XUID ile Xbox Live Servisinden Gerçek Gamertag Çekme (Önbellekli)
 async function getGamertag(xuid) {
   if (!xuid) return null;
   if (gamertagCache.has(xuid)) return gamertagCache.get(xuid);
@@ -56,15 +56,12 @@ async function getGamertag(xuid) {
   return null;
 }
 
-// Bedrock Realms Kontrol Döngüsü
+// Anlık Bedrock Realms Kontrol Döngüsü
 async function realmsKontrolEt() {
   try {
-    console.log("Realms sunucusu kontrol ediliyor...");
-    
     const realms = await api.getRealms();
     
     if (!realms || realms.length === 0) {
-      console.log("Hesaba bağlı herhangi bir Realms sunucusu bulunamadı.");
       return;
     }
 
@@ -89,8 +86,6 @@ async function realmsKontrolEt() {
       suAnkiOyuncular.push(isim);
     }
 
-    console.log("Şu anki çevrimiçi oyuncular:", suAnkiOyuncular);
-
     // İlk kontrolde Telegram grubuna durum raporu gönder
     if (ilkKontrol) {
       oncekiOyuncular = suAnkiOyuncular;
@@ -109,16 +104,17 @@ async function realmsKontrolEt() {
     // Çıkış yapanlar
     const cikanlar = oncekiOyuncular.filter(oyuncu => !suAnkiOyuncular.includes(oyuncu));
 
+    // Bildirimleri eşzamanlı (anında) gönder
     if (yeniGirenler.length > 0) {
-      for (const oyuncu of yeniGirenler) {
-        await telegramMesajGonder(`🎮 ${oyuncu} Realms sunucusuna giriş yaptı!`);
-      }
+      await Promise.all(yeniGirenler.map(oyuncu => 
+        telegramMesajGonder(`🎮 ${oyuncu} Realms sunucusuna giriş yaptı!`)
+      ));
     }
 
     if (cikanlar.length > 0) {
-      for (const oyuncu of cikanlar) {
-        await telegramMesajGonder(`🚪 ${oyuncu} Realms sunucusundan ayrıldı!`);
-      }
+      await Promise.all(cikanlar.map(oyuncu => 
+        telegramMesajGonder(`🚪 ${oyuncu} Realms sunucusundan ayrıldı!`)
+      ));
     }
 
     oncekiOyuncular = suAnkiOyuncular;
@@ -128,8 +124,8 @@ async function realmsKontrolEt() {
   }
 }
 
-// Her 60 saniyede bir kontrol et
-setInterval(realmsKontrolEt, 60000);
+// Kontrol sıklığı: Her 10 saniyede bir (Anlık bildirim için)
+setInterval(realmsKontrolEt, 10000);
 
 // Web Sunucusu
 app.get('/', (req, res) => {
@@ -138,5 +134,5 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Bot ${PORT} portunda başlatıldı.`);
-  setTimeout(realmsKontrolEt, 5000);
+  setTimeout(realmsKontrolEt, 2000);
 });
