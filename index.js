@@ -43,14 +43,22 @@ async function realmsKontrolEt() {
     const targetRealm = realms[0];
     const realmData = await api.getRealm(targetRealm.id);
 
-    // Çevrimiçi oyuncuları filtrele ve null gelmesini önlemek için yedek isim parametrelerini kontrol et
+    // Render Logs ekranından yapıyı görebilmemiz için log
+    if (realmData.players) {
+      console.log("Gelen Oyuncu Verisi:", JSON.stringify(realmData.players));
+    }
+
+    // Bedrock'ın tüm olası isim alanlarını (name, gamerTag, displayName vb.) tara
     const suAnkiOyuncular = (realmData.players || [])
-      .filter(p => p.online === true)
-      .map(p => p.name || p.username || p.gamertag || p.xuid || "Bilinmeyen Oyuncu");
+      .filter(p => p.online === true || p.online === 'true')
+      .map(p => {
+        const isim = p.name || p.gamerTag || p.gamertag || p.displayName || p.username;
+        return isim || (p.xuid ? `Oyuncu_${p.xuid.slice(-4)}` : "Gamer");
+      });
 
     console.log("Şu anki çevrimiçi oyuncular:", suAnkiOyuncular);
 
-    // İlk kontrolde sadece mevcut oyuncuları listeye kaydet
+    // İlk kontrolde mevcut listeyi kaydet
     if (ilkKontrol) {
       oncekiOyuncular = suAnkiOyuncular;
       ilkKontrol = false;
