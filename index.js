@@ -77,15 +77,12 @@ async function realmsKontrolEt() {
     for (const p of onlinePlayers) {
       let isim = p.name || p.gamerTag || p.gamertag || p.displayName || p.username;
       
-      // Bedrock verisinde XUID doğrudan "uuid" veya "xuid" olarak gelebilir
       const xuid = p.xuid || p.uuid;
 
-      // İsim yoksa Xbox Live API'den gerçek Gamertag adını çek
       if (!isim && xuid) {
         isim = await getGamertag(xuid);
       }
 
-      // Son çare yedek isim
       if (!isim) {
         isim = xuid ? `Oyuncu_${xuid.slice(-4)}` : "Oyuncu";
       }
@@ -95,10 +92,15 @@ async function realmsKontrolEt() {
 
     console.log("Şu anki çevrimiçi oyuncular:", suAnkiOyuncular);
 
-    // İlk kontrolde mevcut listeyi kaydet
+    // İlk kontrolde durum raporu gönder
     if (ilkKontrol) {
       oncekiOyuncular = suAnkiOyuncular;
       ilkKontrol = false;
+      if (suAnkiOyuncular.length > 0) {
+        await whatsappMesajGonder(`📌 Bot aktif! Şu an sunucudaki oyuncular: ${suAnkiOyuncular.join(', ')}`);
+      } else {
+        await whatsappMesajGonder("📌 Bot aktif! Şu an sunucuda kimse yok.");
+      }
       return;
     }
 
