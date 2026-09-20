@@ -71,34 +71,23 @@ async function realmsKontrolEt() {
     const targetRealm = realms[0];
     const realmData = await api.getRealm(targetRealm.id);
 
-    // Debug amaçlı ham veriyi loglama
-    if (realmData.players) {
-      console.log("Gelen Oyuncu Verisi:", JSON.stringify(realmData.players));
-    }
-
     const onlinePlayers = (realmData.players || []).filter(p => p.online === true || p.online === 'true');
     const suAnkiOyuncular = [];
 
     for (const p of onlinePlayers) {
-      let isim = null;
+      let isim = p.name || p.gamerTag || p.gamertag || p.displayName || p.username;
+      
+      // Bedrock verisinde XUID doğrudan "uuid" veya "xuid" olarak gelebilir
+      const xuid = p.xuid || p.uuid;
 
-      // 1. Veri doğrudan metin (string) ise
-      if (typeof p === 'string') {
-        isim = p;
-      } 
-      // 2. Nesne ise içindeki tüm olası isim alanlarını tara
-      else if (p && typeof p === 'object') {
-        isim = p.name || p.gamerTag || p.gamertag || p.displayName || p.username || (p.player && (p.player.name || p.player.gamertag));
-        
-        // 3. İsim bulunamadıysa XUID ile Xbox Live'dan Gamertag sorgula
-        if (!isim && p.xuid) {
-          isim = await getGamertag(p.xuid);
-        }
+      // İsim yoksa Xbox Live API'den gerçek Gamertag adını çek
+      if (!isim && xuid) {
+        isim = await getGamertag(xuid);
       }
 
-      // 4. Yedek tanım
+      // Son çare yedek isim
       if (!isim) {
-        isim = p.xuid ? `Oyuncu_${p.xuid.slice(-4)}` : "Oyuncu";
+        isim = xuid ? `Oyuncu_${xuid.slice(-4)}` : "Oyuncu";
       }
 
       suAnkiOyuncular.push(isim);
