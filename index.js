@@ -6,9 +6,9 @@ const { Authflow } = require('prismarine-auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CallMeBot WhatsApp Bilgileri
-const PHONE_NUMBER = "905427619891";
-const CALLMEBOT_API_KEY = "2320760";
+// Telegram Bot Bilgileri
+const TELEGRAM_BOT_TOKEN = "8828670056:AAFQSjff6jw35Rhu3_B4MqsGOcFMy_zEWhA";
+const TELEGRAM_CHAT_ID = "-1004306640579";
 
 // Microsoft Yetkilendirme (Bedrock için)
 const authflow = new Authflow('realmsbot', './auth_cache');
@@ -16,16 +16,16 @@ const api = RealmAPI.from(authflow, 'bedrock');
 
 let oncekiOyuncular = [];
 let ilkKontrol = true;
-const gamertagCache = new Map(); // XUID -> Gamertag önbelleği
+const gamertagCache = new Map();
 
-// WhatsApp Bildirim Fonksiyonu
-async function whatsappMesajGonder(metin) {
+// Telegram Bildirim Fonksiyonu
+async function telegramMesajGonder(metin) {
   try {
-    const url = `https://api.callmebot.com/whatsapp.php?phone=${PHONE_NUMBER}&text=${encodeURIComponent(metin)}&apikey=${CALLMEBOT_API_KEY}`;
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage?chat_id=${TELEGRAM_CHAT_ID}&text=${encodeURIComponent(metin)}`;
     await fetch(url);
-    console.log("WhatsApp bildirimi gönderildi:", metin);
+    console.log("Telegram bildirimi gönderildi:", metin);
   } catch (hata) {
-    console.error("WhatsApp mesajı gönderilemedi:", hata);
+    console.error("Telegram mesajı gönderilemedi:", hata);
   }
 }
 
@@ -76,7 +76,6 @@ async function realmsKontrolEt() {
 
     for (const p of onlinePlayers) {
       let isim = p.name || p.gamerTag || p.gamertag || p.displayName || p.username;
-      
       const xuid = p.xuid || p.uuid;
 
       if (!isim && xuid) {
@@ -92,14 +91,14 @@ async function realmsKontrolEt() {
 
     console.log("Şu anki çevrimiçi oyuncular:", suAnkiOyuncular);
 
-    // İlk kontrolde durum raporu gönder
+    // İlk kontrolde Telegram grubuna durum raporu gönder
     if (ilkKontrol) {
       oncekiOyuncular = suAnkiOyuncular;
       ilkKontrol = false;
       if (suAnkiOyuncular.length > 0) {
-        await whatsappMesajGonder(`📌 Bot aktif! Şu an sunucudaki oyuncular: ${suAnkiOyuncular.join(', ')}`);
+        await telegramMesajGonder(`📌 Realms Botu Aktif!\nŞu an sunucudaki oyuncular: ${suAnkiOyuncular.join(', ')}`);
       } else {
-        await whatsappMesajGonder("📌 Bot aktif! Şu an sunucuda kimse yok.");
+        await telegramMesajGonder("📌 Realms Botu Aktif!\nŞu an sunucuda kimse yok.");
       }
       return;
     }
@@ -112,13 +111,13 @@ async function realmsKontrolEt() {
 
     if (yeniGirenler.length > 0) {
       for (const oyuncu of yeniGirenler) {
-        await whatsappMesajGonder(`🎮 ${oyuncu} sunucuya giriş yaptı!`);
+        await telegramMesajGonder(`🎮 ${oyuncu} Realms sunucusuna giriş yaptı!`);
       }
     }
 
     if (cikanlar.length > 0) {
       for (const oyuncu of cikanlar) {
-        await whatsappMesajGonder(`🚪 ${oyuncu} sunucudan ayrıldı!`);
+        await telegramMesajGonder(`🚪 ${oyuncu} Realms sunucusundan ayrıldı!`);
       }
     }
 
@@ -134,7 +133,7 @@ setInterval(realmsKontrolEt, 60000);
 
 // Web Sunucusu
 app.get('/', (req, res) => {
-  res.send('Bedrock Realms Botu 7/24 Aktif ve Çalışıyor!');
+  res.send('Bedrock Realms Telegram Botu 7/24 Aktif!');
 });
 
 app.listen(PORT, () => {
