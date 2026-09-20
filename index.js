@@ -16,6 +16,7 @@ const api = RealmAPI.from(authflow, 'bedrock');
 
 let oncekiOyuncular = [];
 let ilkKontrol = true;
+const gamertagCache = new Map(); // XUID -> Gamertag önbelleği
 
 // WhatsApp Bildirim Fonksiyonu
 async function whatsappMesajGonder(metin) {
@@ -26,6 +27,33 @@ async function whatsappMesajGonder(metin) {
   } catch (hata) {
     console.error("WhatsApp mesajı gönderilemedi:", hata);
   }
+}
+
+// XUID ile Xbox Live Servisinden Gerçek Gamertag Çekme
+async function getGamertag(xuid) {
+  if (!xuid) return null;
+  if (gamertagCache.has(xuid)) return gamertagCache.get(xuid);
+
+  try {
+    const xboxToken = await authflow.getXboxToken('http://xboxlive.com');
+    const response = await fetch(`https://profile.xboxlive.com/users/xuid(${xuid})/settings?settings=Gamertag`, {
+      headers: {
+        'Authorization': `XBL3.0 x=${xboxToken.userHash};${xboxToken.XSTSToken}`,
+        'x-xbl-contract-version': '2'
+      }
+    });
+    const data = await response.json();
+    if (data.profileUsers && data.profileUsers[0] && data.profileUsers[0].settings) {
+      const setting = data.profileUsers[0].settings.find(s => s.id === 'Gamertag');
+      if (setting && setting.value) {
+        gamertagCache.set(xuid, setting.value);
+        return setting.value;
+      }
+    }
+  } catch (err) {
+    console.error("Xbox profili çekme hatası:", err.message);
+  }
+  return null;
 }
 
 // Bedrock Realms Kontrol Döngüsü
@@ -43,18 +71,38 @@ async function realmsKontrolEt() {
     const targetRealm = realms[0];
     const realmData = await api.getRealm(targetRealm.id);
 
-    // Render Logs ekranından yapıyı görebilmemiz için log
+    // Debug amaçlı ham veriyi loglama
     if (realmData.players) {
       console.log("Gelen Oyuncu Verisi:", JSON.stringify(realmData.players));
     }
 
-    // Bedrock'ın tüm olası isim alanlarını (name, gamerTag, displayName vb.) tara
-    const suAnkiOyuncular = (realmData.players || [])
-      .filter(p => p.online === true || p.online === 'true')
-      .map(p => {
-        const isim = p.name || p.gamerTag || p.gamertag || p.displayName || p.username;
-        return isim || (p.xuid ? `Oyuncu_${p.xuid.slice(-4)}` : "Gamer");
-      });
+    const onlinePlayers = (realmData.players || []).filter(p => p.online === true || p.online === 'true');
+    const suAnkiOyuncular = [];
+
+    for (const p of onlinePlayers) {
+      let isim = null;
+
+      // 1. Veri doğrudan metin (string) ise
+      if (typeof p === 'string') {
+        isim = p;
+      } 
+      // 2. Nesne ise içindeki tüm olası isim alanlarını tara
+      else if (p && typeof p === 'object') {
+        isim = p.name || p.gamerTag || p.gamertag || p.displayName || p.username || (p.player && (p.player.name || p.player.gamertag));
+        
+        // 3. İsim bulunamadıysa XUID ile Xbox Live'dan Gamertag sorgula
+        if (!isim && p.xuid) {
+          isim = await getGamertag(p.xuid);
+        }
+      }
+
+      // 4. Yedek tanım
+      if (!isim) {
+        isim = p.xuid ? `Oyuncu_${p.xuid.slice(-4)}` : "Oyuncu";
+      }
+
+      suAnkiOyuncular.push(isim);
+    }
 
     console.log("Şu anki çevrimiçi oyuncular:", suAnkiOyuncular);
 
@@ -65,20 +113,18 @@ async function realmsKontrolEt() {
       return;
     }
 
-    // Sunucuya yeni giren oyuncular
+    // Giriş yapanlar
     const yeniGirenler = suAnkiOyuncular.filter(oyuncu => !oncekiOyuncular.includes(oyuncu));
     
-    // Sunucudan çıkan oyuncular
+    // Çıkış yapanlar
     const cikanlar = oncekiOyuncular.filter(oyuncu => !suAnkiOyuncular.includes(oyuncu));
 
-    // Giriş bildirimleri
     if (yeniGirenler.length > 0) {
       for (const oyuncu of yeniGirenler) {
         await whatsappMesajGonder(`🎮 ${oyuncu} sunucuya giriş yaptı!`);
       }
     }
 
-    // Çıkış bildirimleri
     if (cikanlar.length > 0) {
       for (const oyuncu of cikanlar) {
         await whatsappMesajGonder(`🚪 ${oyuncu} sunucudan ayrıldı!`);
