@@ -1,5 +1,7 @@
 const express = require('express');
 const fetch = require('node-fetch');
+const { RealmAPI } = require('prismarine-realms');
+const { Authflow } = require('prismarine-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,7 +10,12 @@ const PORT = process.env.PORT || 3000;
 const PHONE_NUMBER = "905427619891";
 const CALLMEBOT_API_KEY = "2320760";
 
+// Microsoft Yetkilendirme (Bedrock için)
+const authflow = new Authflow('realmsbot', './auth_cache');
+const api = RealmAPI.from(authflow, 'bedrock');
+
 let oncekiOyuncular = [];
+let ilkKontrol = true;
 
 // WhatsApp Bildirim Fonksiyonu
 async function whatsappMesajGonder(metin) {
@@ -21,29 +28,63 @@ async function whatsappMesajGonder(metin) {
   }
 }
 
-// Test bildirimi (Bot her başladığında WhatsApp'a çalışıyor mesajı atar)
-whatsappMesajGonder("🚀 Realms WhatsApp Botu Render üzerinde başarıyla başlatıldı!");
-
-// Realms Kontrol Döngüsü (Her 60 saniyede bir çalışır)
+// Bedrock Realms Kontrol Döngüsü
 async function realmsKontrolEt() {
   try {
     console.log("Realms sunucusu kontrol ediliyor...");
     
-    // Realms API kontrol mantığı buraya gelecek
+    // Hesaba bağlı tüm Realms sunucularını çek
+    const realms = await api.getRealms();
     
+    if (!realms || realms.length === 0) {
+      console.log("Hesaba bağlı herhangi bir Realms sunucusu bulunamadı.");
+      return;
+    }
+
+    // İlk Realms sunucusunu seç
+    const targetRealm = realms[0];
+    const realmData = await api.getRealm(targetRealm.id);
+
+    // Çevrimiçi oyuncuları filtrele
+    const suAnkiOyuncular = (realmData.players || [])
+      .filter(p => p.online === true)
+      .map(p => p.name);
+
+    console.log("Şu anki çevrimiçi oyuncular:", suAnkiOyuncular);
+
+    // İlk kontrolde mevcut herkesi mesaj atıp rahatsız etmemek için sadece listeyi kaydet
+    if (ilkKontrol) {
+      oncekiOyuncular = suAnkiOyuncular;
+      ilkKontrol = false;
+      return;
+    }
+
+    // Sunucuya yeni giren oyuncuları tespit et
+    const yeniGirenler = suAnkiOyuncular.filter(oyuncu => !oncekiOyuncular.includes(oyuncu));
+
+    if (yeniGirenler.length > 0) {
+      for (const oyuncu of yeniGirenler) {
+        await whatsappMesajGonder(`🎮 ${oyuncu} Bedrock Realms sunucusuna giriş yaptı!`);
+      }
+    }
+
+    oncekiOyuncular = suAnkiOyuncular;
+
   } catch (hata) {
-    console.error("Realms kontrol hatası:", hata);
+    console.error("Realms kontrol hatası:", hata.message);
   }
 }
 
-// 60 saniyede bir kontrol et
+// Her 60 saniyede bir kontrol yap
 setInterval(realmsKontrolEt, 60000);
 
-// Render'ın uyku moduna geçmemesi için web sunucusu
+// Web Sunucusu (7/24 Aktiflik için)
 app.get('/', (req, res) => {
-  res.send('Realms Botu 7/24 Aktif ve Çalışıyor!');
+  res.send('Bedrock Realms Botu 7/24 Aktif ve Çalışıyor!');
 });
 
 app.listen(PORT, () => {
-  console.log(`Bot ${PORT} portunda başarıyla başlatıldı.`);
+  console.log(`Bot ${PORT} portunda başlatıldı.`);
+  // İlk kontrolü başlat
+  setTimeout(realmsKontrolEt, 5000);
 });
