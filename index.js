@@ -33,7 +33,6 @@ async function realmsKontrolEt() {
   try {
     console.log("Realms sunucusu kontrol ediliyor...");
     
-    // Hesaba bağlı tüm Realms sunucularını çek
     const realms = await api.getRealms();
     
     if (!realms || realms.length === 0) {
@@ -41,30 +40,40 @@ async function realmsKontrolEt() {
       return;
     }
 
-    // İlk Realms sunucusunu seç
     const targetRealm = realms[0];
     const realmData = await api.getRealm(targetRealm.id);
 
-    // Çevrimiçi oyuncuları filtrele
+    // Çevrimiçi oyuncuları filtrele ve null gelmesini önlemek için yedek isim parametrelerini kontrol et
     const suAnkiOyuncular = (realmData.players || [])
       .filter(p => p.online === true)
-      .map(p => p.name);
+      .map(p => p.name || p.username || p.gamertag || p.xuid || "Bilinmeyen Oyuncu");
 
     console.log("Şu anki çevrimiçi oyuncular:", suAnkiOyuncular);
 
-    // İlk kontrolde mevcut herkesi mesaj atıp rahatsız etmemek için sadece listeyi kaydet
+    // İlk kontrolde sadece mevcut oyuncuları listeye kaydet
     if (ilkKontrol) {
       oncekiOyuncular = suAnkiOyuncular;
       ilkKontrol = false;
       return;
     }
 
-    // Sunucuya yeni giren oyuncuları tespit et
+    // Sunucuya yeni giren oyuncular
     const yeniGirenler = suAnkiOyuncular.filter(oyuncu => !oncekiOyuncular.includes(oyuncu));
+    
+    // Sunucudan çıkan oyuncular
+    const cikanlar = oncekiOyuncular.filter(oyuncu => !suAnkiOyuncular.includes(oyuncu));
 
+    // Giriş bildirimleri
     if (yeniGirenler.length > 0) {
       for (const oyuncu of yeniGirenler) {
-        await whatsappMesajGonder(`🎮 ${oyuncu} Bedrock Realms sunucusuna giriş yaptı!`);
+        await whatsappMesajGonder(`🎮 ${oyuncu} sunucuya giriş yaptı!`);
+      }
+    }
+
+    // Çıkış bildirimleri
+    if (cikanlar.length > 0) {
+      for (const oyuncu of cikanlar) {
+        await whatsappMesajGonder(`🚪 ${oyuncu} sunucudan ayrıldı!`);
       }
     }
 
@@ -75,16 +84,15 @@ async function realmsKontrolEt() {
   }
 }
 
-// Her 60 saniyede bir kontrol yap
+// Her 60 saniyede bir kontrol et
 setInterval(realmsKontrolEt, 60000);
 
-// Web Sunucusu (7/24 Aktiflik için)
+// Web Sunucusu
 app.get('/', (req, res) => {
   res.send('Bedrock Realms Botu 7/24 Aktif ve Çalışıyor!');
 });
 
 app.listen(PORT, () => {
   console.log(`Bot ${PORT} portunda başlatıldı.`);
-  // İlk kontrolü başlat
   setTimeout(realmsKontrolEt, 5000);
 });
